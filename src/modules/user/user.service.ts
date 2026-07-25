@@ -38,7 +38,8 @@ export async function updateUser(id: string, input: AdminUpdateInput) {
   return user;
 }
 
-export async function deleteUser(id: string) {
+export async function deleteUser(id: string, requesterId: string) {
+  if (id === requesterId) throw new AppError(400, "You cannot delete your own account");
   const user = await User.findByIdAndDelete(id);
   if (!user) throw new AppError(404, "User not found");
 }

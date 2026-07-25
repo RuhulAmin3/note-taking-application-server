@@ -22,7 +22,7 @@ export const updateUser = asyncHandler(async (req, res) => {
 });
 
 export const deleteUser = asyncHandler(async (req, res) => {
-  await userService.deleteUser(req.params.id);
+  await userService.deleteUser(req.params.id, req.user!.id);
   res.status(204).send();
 });
 

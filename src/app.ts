@@ -19,4 +19,7 @@ app.use("/api/notes", noteRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/posts", postRoutes);
 
+// Unknown route -> JSON 404 (consistent API responses instead of Express HTML)
+app.use((_req, res) => res.status(404).json({ error: "Not found" }));
+
 app.use(errorHandler);
