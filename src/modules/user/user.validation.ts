@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const adminCreateSchema = z.object({
   name: z.string().min(1),
-  email: z.string().email(),
+  email: z.email(),
   password: z.string().min(8),
   role: z.enum(["user", "admin"]).optional(),
   interests: z.array(z.string()).optional(),
@@ -10,7 +10,7 @@ export const adminCreateSchema = z.object({
 
 export const adminUpdateSchema = z.object({
   name: z.string().min(1).optional(),
-  email: z.string().email().optional(),
+  email: z.email().optional(),
   role: z.enum(["user", "admin"]).optional(),
   interests: z.array(z.string()).optional(),
 });
