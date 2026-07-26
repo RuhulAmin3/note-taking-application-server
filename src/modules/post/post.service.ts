@@ -42,3 +42,58 @@ export async function getUserPosts(userId: string, query: Record<string, unknown
   const total = facet.total[0]?.value ?? 0;
   return { data: facet.data, meta: buildMeta(total, page, limit) };
 }
+
+// admin: everyone's posts. Unfiltered → paginate by _id (default index), the
+// same shape listAllNotes uses.
+export async function listAllPosts(query: Record<string, unknown>) {
+  const { page, limit, skip } = parsePagination(query);
+
+  const result = await Post.aggregate([
+    { $sort: { _id: -1 } },
+    {
+      $facet: {
+        data: [
+          { $skip: skip },
+          { $limit: limit },
+          { $lookup: { from: "users", localField: "author", foreignField: "_id", as: "author" } },
+          { $unwind: "$author" },
+          {
+            $project: {
+              title: 1, content: 1, createdAt: 1,
+              "author._id": 1, "author.name": 1, "author.email": 1,
+            },
+          },
+        ],
+        total: [{ $count: "value" }],
+      },
+    },
+  ]);
+
+  const facet = result[0];
+  const total = facet.total[0]?.value ?? 0;
+  return { data: facet.data, meta: buildMeta(total, page, limit) };
+}
+
+async function findOwnedOrAdmin(id: string, userId: string, role: string) {
+  const post = await Post.findById(id);
+  if (!post) throw new AppError(404, "Post not found");
+  if (role !== "admin" && post.author.toString() !== userId) throw new AppError(403, "Forbidden");
+  return post;
+}
+
+export async function updatePost(
+  id: string,
+  userId: string,
+  role: string,
+  input: Partial<PostBodyInput>
+) {
+  const post = await findOwnedOrAdmin(id, userId, role);
+  Object.assign(post, input);
+  await post.save();
+  return post;
+}
+
+export async function deletePost(id: string, userId: string, role: string) {
+  const post = await findOwnedOrAdmin(id, userId, role);
+  await post.deleteOne();
+}
