@@ -44,7 +44,7 @@ npm run seed              # create admin@test.com / adminpass123
 | POST | `/api/auth/login` | public | returns JWT |
 | GET | `/api/users/me` | auth | own profile |
 | GET | `/api/users` | admin | list users (paginated) |
-| POST | `/api/users` | admin | create user (role settable) |
+| POST | `/api/users` | admin | create user (accepts `role`; the dashboard never sends `admin`) |
 | GET/PATCH/DELETE | `/api/users/:id` | admin | manage a user |
 | GET | `/api/users/grouped-by-interests` | admin | **Aggregation Scenario 1** |
 | POST | `/api/notes` | auth | create own note |
@@ -53,8 +53,14 @@ npm run seed              # create admin@test.com / adminpass123
 | GET/PATCH/DELETE | `/api/notes/:id` | owner or admin | single note |
 | POST | `/api/posts` | auth | create a post |
 | GET | `/api/posts/user/:userId` | auth | **Aggregation Scenario 2** ($lookup) |
+| GET | `/api/posts/all` | admin | list everyone's posts (paginated, author joined) |
+| PATCH/DELETE | `/api/posts/:id` | owner or admin | single post |
 
 All list endpoints accept `?page=&limit=` (limit capped at 100) and return `{ data, meta: { page, limit, total, totalPages } }`.
+
+`/notes/all` and `/posts/all` are registered before `/:id` so that `all` is not parsed as an id.
+
+Ownership on `/notes/:id` and `/posts/:id` is enforced in the service layer (`findOwnedOrAdmin`): the owner or an admin may proceed, anyone else gets `403`.
 
 ## Indexing strategy (graded — minimal, all via `schema.index()`)
 
@@ -82,7 +88,20 @@ Every by-id read (`GET /users/:id`, `GET /notes/:id`, profile) is served by the 
 
 ## Verification evidence (`explain()`)
 
-> To capture once connected to MongoDB: run the `mongosh` commands in the plan's Task 3/5/7/8 verification steps and paste the `winningPlan` stage for each of the three indexes here, plus the `COLLSCAN` output for the interests aggregation. These confirm every declared index is used and that the omitted ones would not be.
+Winning plans captured against the Atlas cluster:
+
+```
+User {email:1} unique  : EXPRESS_IXSCAN (email_1)
+Note {owner,createdAt}: LIMIT <- FETCH <- IXSCAN (owner_1_createdAt_-1)
+Post {author:1}       : FETCH <- IXSCAN (author_1)
+interests aggregation : PROJECTION_SIMPLE <- COLLSCAN
+```
+
+Each of the three declared indexes is used by the query it was created for. `EXPRESS_IXSCAN` is the fast path MongoDB 8 takes for a single-equality lookup on a unique index.
+
+The notes plan is the one worth reading closely: there is **no `SORT` stage**. The compound `{ owner: 1, createdAt: -1 }` satisfies the filter and the ordering together, so pagination never sorts in memory.
+
+The interests aggregation is a `COLLSCAN`, exactly as argued above — it groups every user with no `$match`, so there is no predicate for an index to serve and adding one would leave it unused.
 
 ## Security
 
